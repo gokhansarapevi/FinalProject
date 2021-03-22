@@ -24,6 +24,10 @@ namespace Business.Concrete
         public IDataResult<List<Product>> GetAll()
         {
             //Varsa iş kodlarını buraya yazarız. (yetkisi var mı vs tarzında if clauses.)
+            if (DateTime.Now.Hour == 1)
+            {
+                return new ErrorDataResult<List<Product>>(Messages.MaintenanceTime);
+            }
             return new SuccessDataResult<List<Product>>(_productDal.GetAll(),Messages.ProductsListed);
         }
 
