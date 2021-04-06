@@ -15,9 +15,13 @@ using DataAccess.Concrete.InMemory;
 using Entities.DTOs;
 using FluentValidation;
 using Business.BusinessAspects.Autofac;
+using Core.Aspects.Autofac.Caching;
+using Core.Aspects.Autofac.Performance;
+using Core.Aspects.Autofac.Transaction;
 
 namespace Business.Concrete
 {
+    [PerformanceAspect(5)]
     public class ProductManager : IProductService
     {
         IProductDal _productDal;
@@ -29,6 +33,8 @@ namespace Business.Concrete
             _categoryService = categoryService;
         }
 
+
+        [CacheAspect]
         public IDataResult<List<Product>> GetAll()
         {
             if (DateTime.Now.Hour == 1)
@@ -38,15 +44,18 @@ namespace Business.Concrete
             return new SuccessDataResult<List<Product>>(_productDal.GetAll(), Messages.ProductsListed);
         }
 
+
         public IDataResult<List<Product>> GetAllByCategory(int id)
         {
             return new SuccessDataResult<List<Product>>(_productDal.GetAll(p => p.CategoryId == id));
         }
 
+
         public IDataResult<List<Product>> GetByUnitPrice(decimal min, decimal max)
         {
             return new SuccessDataResult<List<Product>>(_productDal.GetAll(p => p.UnitPrice >= min && p.UnitPrice <= max));
         }
+
 
         public IDataResult<List<ProductDetailDto>> GetProductDetails()
         {
@@ -56,7 +65,10 @@ namespace Business.Concrete
             }
             return new SuccessDataResult<List<ProductDetailDto>>(_productDal.GetProductDetails());
         }
-        [SecuredOperation("product.add,admin")]
+
+
+        [SecuredOperation("product.add")]
+        [CacheRemoveAspect("IProductService.Get")]
         [ValidationAspect(typeof(ProductValidator))]
         public IResult Add(Product product)
         {
@@ -71,11 +83,37 @@ namespace Business.Concrete
             return new SuccessResult(Messages.ProductAdded);
         }
 
+
+        [CacheRemoveAspect("IProductService.Get")]
+        public IResult Update(Product product)
+        {
+            var result = _productDal.GetAll(p => p.CategoryId == product.CategoryId).Count;
+            if (result >= 10)
+            {
+                return new ErrorResult(Messages.ProductCountOfCategoryError);
+            }
+            throw new NotImplementedException();
+        }
+
+
+        [CacheAspect]
         public IDataResult<Product> GetById(int productId)
         {
             return new SuccessDataResult<Product>(_productDal.Get(p => p.ProductId == productId));
         }
+        [TransactionScopeAspect]
+        public IResult AddTransactionalTest(Product product)
+        {
+            Add(product);
+            if (product.UnitPrice<10)
+            {
+                throw new Exception("");
+            }
+            Add(product);
+            return null;
+        }
 
+        //BusinessChecks
         private IResult CheckIfProductCountOfCategoryCorrect(int categoryId)
         {
             if (_productDal.GetAll(p => p.CategoryId == categoryId).Count >= 10)
